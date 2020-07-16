@@ -1,12 +1,11 @@
-from datasets.edges2shoes_dataset import Edges2ShoesDataset
+from datasets.facades_dataset import FacadesDataset
 from core.torch_trainer import TorchTrainer
 from torch.utils.data import DataLoader
-from torch.optim import Adam
+from torch.optim import Adam, lr_scheduler
 import torch.nn as nn
 from models.pix2pix import Pix2Pix
 import torch
 from utils import set_requires_grad, tensor2image
-from PIL import Image
 
 
 class Pix2PixTrainer(TorchTrainer):
@@ -16,13 +15,13 @@ class Pix2PixTrainer(TorchTrainer):
 
         # data loader for training, testing set
         self.train_dataloader = DataLoader(
-            dataset=Edges2ShoesDataset(self.args, is_test=False),
+            dataset=FacadesDataset(self.args, dataset_type='train'),
             num_workers=args.workers,
             batch_size=args.batch_size,
             shuffle=True
         )
         self.test_dataloader = DataLoader(
-            dataset=Edges2ShoesDataset(self.args, is_test=True),
+            dataset=FacadesDataset(self.args, dataset_type='test'),
             num_workers=args.workers,
             batch_size=args.batch_size,
             shuffle=False
@@ -42,7 +41,13 @@ class Pix2PixTrainer(TorchTrainer):
         self.optimizer_g = Adam(self.generator.parameters(), lr=args.lr)
         self.optimizer_d = Adam(self.discriminator.parameters(), lr=args.lr)
 
-        # parameters to save
+        # schedulers
+        def lr_lambda(epoch):
+            return 1.0-max(0, epoch-args.epochs*(1-args.decay_ratio)) / (args.decay_ratio*args.epochs+1)
+        self.scheduler_g = lr_scheduler.LambdaLR(self.optimizer_g, lr_lambda=lr_lambda)
+        self.scheduler_d = lr_scheduler.LambdaLR(self.optimizer_d, lr_lambda=lr_lambda)
+
+        # parameter to save
         self.epoch = 0
 
     def train(self, filepath=None):
@@ -94,8 +99,12 @@ class Pix2PixTrainer(TorchTrainer):
                     loss_g.item(),
                     loss_d.item()+loss_g.item()
                 ))
-            self._test()
-            self._save()
+            self.scheduler_g.step()
+            self.scheduler_d.step()
+
+            if self.epoch % self.args.save_freq == 0:
+                self._test()
+                self._save()
 
     def _test(self, generate_images=True):
         self.model.eval()
@@ -107,7 +116,7 @@ class Pix2PixTrainer(TorchTrainer):
                 mse += self.criterion_mse(pred_b, real_b).item()/len(self.test_dataloader)
                 if generate_images:
                     for i in range(pred_b.shape[0]):
-                        im = Image.fromarray(tensor2image(pred_b[i]))
+                        im = tensor2image(pred_b[i])
                         im.save(self.args.results_dir+'/'+str(self.args.batch_size*iteration+i)+'.jpg')
         print('Epoch[{0}] - MSE: {1}'.format(
             self.epoch, mse
@@ -118,7 +127,9 @@ class Pix2PixTrainer(TorchTrainer):
             'epoch': self.epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_g_state_dict': self.optimizer_g.state_dict(),
-            'optimizer_d_state_dict': self.optimizer_d.state_dict()
+            'optimizer_d_state_dict': self.optimizer_d.state_dict(),
+            'scheduler_g_state_dict': self.scheduler_g.state_dict(),
+            'scheduler_d_state_dict': self.scheduler_d.state_dict()
         }
         for suffix in [str(self.epoch), 'last']:
             torch.save(dic, self.args.save_dir+'/checkpoint_{0}.pt'.format(suffix))
@@ -132,6 +143,8 @@ class Pix2PixTrainer(TorchTrainer):
         self.model.load_state_dict(dic['model_state_dict'])
         self.optimizer_g.load_state_dict(dic['optimizer_g_state_dict'])
         self.optimizer_d.load_state_dict(dic['optimizer_d_state_dict'])
+        self.scheduler_g.load_state_dict(dic['scheduler_g_state_dict'])
+        self.scheduler_d.load_state_dict(dic['scheduler_d_state_dict'])
 
 
 class GANLoss(nn.Module):

@@ -1,4 +1,5 @@
 import numpy as np
+from PIL import Image
 
 
 def set_requires_grad(net, requires_grad):
@@ -10,4 +11,5 @@ def tensor2image(tensor):
     arr = tensor.data.cpu().numpy()
     arr = (np.transpose(arr, (1, 2, 0)) + 1) / 2.0 * 255.0
     arr = arr.astype(np.uint8)
-    return arr
+    im = Image.fromarray(arr)
+    return im
