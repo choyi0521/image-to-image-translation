@@ -20,7 +20,7 @@ class FacadesDataset(Dataset):
     def __getitem__(self, idx):
         img = Image.open(self.fnames[idx]).convert('RGB')
         img = self.transform(img)
-        x, y = img[:, :, :256], img[:, :, 256:]
+        x, y = img[:, :, 256:], img[:, :, :256]
         return x, y
 
     def __len__(self):
