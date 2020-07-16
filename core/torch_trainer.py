@@ -12,10 +12,10 @@ class TorchTrainer(object):
         # cuda setting
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def train(self):
+    def train(self, **kwargs):
         pass
 
-    def validate(self):
+    def test(self, **kwargs):
         pass
 
     def set_random_seed(self, seed=42):

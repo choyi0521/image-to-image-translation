@@ -2,27 +2,27 @@ import torch.nn as nn
 import torch
 
 
-class Pix2Pix(nn.module):
-    def __init__(self, inner_channels):
+class Pix2Pix(nn.Module):
+    def __init__(self, inner_channels, dropout=0.5):
         super().__init__()
-        self.generator = UNetGenerator(3, inner_channels)
-        self.discriminator = NLayerDiscriminator(3, inner_channels)
+        self.generator = UNetGenerator(3, inner_channels, dropout=dropout)
+        self.discriminator = NLayerDiscriminator(6, inner_channels)
 
     def generate(self, x):
         return self.generator(x)
 
 
-class UNetGenerator(nn.module):
-    def __init__(self, image_channels=3, inner_channels=64, n_layers=8):
+class UNetGenerator(nn.Module):
+    def __init__(self, image_channels=3, inner_channels=64, n_layers=8, dropout=0.5):
         super().__init__()
         assert n_layers >= 5
 
         block = UNetSkipConnectionBlock(inner_channels*8, inner_channels*8, 'innermost')
         for _ in range(n_layers-5):
-            block = UNetSkipConnectionBlock(inner_channels*8, inner_channels*8, 'middle', block)
-        block = UNetSkipConnectionBlock(inner_channels*4, inner_channels*8, 'middle', block)
-        block = UNetSkipConnectionBlock(inner_channels*2, inner_channels*4, 'middle', block)
-        block = UNetSkipConnectionBlock(inner_channels, inner_channels*2, 'middle', block)
+            block = UNetSkipConnectionBlock(inner_channels*8, inner_channels*8, 'middle', block, dropout)
+        block = UNetSkipConnectionBlock(inner_channels*4, inner_channels*8, 'middle', block, dropout)
+        block = UNetSkipConnectionBlock(inner_channels*2, inner_channels*4, 'middle', block, dropout)
+        block = UNetSkipConnectionBlock(inner_channels, inner_channels*2, 'middle', block, dropout)
         self.model = UNetSkipConnectionBlock(image_channels, inner_channels, 'outermost', block)
 
     def forward(self, x):
@@ -34,7 +34,8 @@ class UNetSkipConnectionBlock(nn.Module):
                  outer_channels,
                  inner_channels,
                  module_type,
-                 submodule=None
+                 submodule=None,
+                 dropout=0.5,
                  ):
         super().__init__()
         if module_type not in ['innermost', 'outermost', 'middle']:
@@ -56,7 +57,7 @@ class UNetSkipConnectionBlock(nn.Module):
             modules = [down_conv, submodule, up_relu, up_conv, nn.Tanh()]
         else:
             up_conv = nn.ConvTranspose2d(inner_channels*2, outer_channels, kernel_size=4, stride=2, padding=1, bias=False)
-            modules = [down_relu, down_conv, down_norm, submodule, up_relu, up_conv, up_norm]
+            modules = [down_relu, down_conv, down_norm, submodule, up_relu, up_conv, up_norm, nn.Dropout(dropout)]
 
         self. model = nn.Sequential(*modules)
 
@@ -67,10 +68,10 @@ class UNetSkipConnectionBlock(nn.Module):
 
 
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, image_channels=3, inner_channels=64, n_layers=3):
+    def __init__(self, input_channels=6, inner_channels=64, n_layers=3):
         super().__init__()
 
-        modules = [nn.Conv2d(image_channels, inner_channels, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True)]
+        modules = [nn.Conv2d(input_channels, inner_channels, kernel_size=4, stride=2, padding=1), nn.LeakyReLU(0.2, True)]
         for i in range(n_layers-1):
             modules += [
                 nn.Conv2d(inner_channels*min(2**i, 8), inner_channels*min(2**(i+1), 8), kernel_size=4, stride=2, padding=1, bias=False),
@@ -87,4 +88,4 @@ class NLayerDiscriminator(nn.Module):
         self.model = nn.Sequential(*modules)
 
     def forward(self, x):
-        self.model(x)
+        return self.model(x)
