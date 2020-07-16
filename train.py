@@ -9,6 +9,7 @@ if __name__=='__main__':
     parser.add_argument('--checkpoint', type=str, required=False)
     parser.add_argument('--save_dir', type=str, required=False, default='./checkpoints')
     parser.add_argument('--results_dir', type=str, required=False, default='./results')
+    parser.add_argument('--device', type=int, default=0)
 
     # data loader
     parser.add_argument('--workers', type=int, default=4)

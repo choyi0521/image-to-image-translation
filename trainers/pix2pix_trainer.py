@@ -117,7 +117,7 @@ class Pix2PixTrainer(TorchTrainer):
                 if generate_images:
                     for i in range(pred_b.shape[0]):
                         im = tensor2image(pred_b[i])
-                        im.save(self.args.results_dir+'/'+str(self.args.batch_size*iteration+i)+'.jpg')
+                        im.save(self.args.results_dir+'/'+str(self.args.batch_size*iteration+i+1)+'.jpg')
         print('Epoch[{0}] - MSE: {1}'.format(
             self.epoch, mse
         ))
