@@ -10,8 +10,7 @@ from utils import set_requires_grad, tensor2image
 
 class Pix2PixTrainer(TorchTrainer):
     def __init__(self, args):
-        super().__init__()
-        self.args = args
+        super().__init__(args)
 
         # data loader for training, testing set
         self.train_dataloader = DataLoader(

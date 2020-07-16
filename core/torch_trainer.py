@@ -6,11 +6,12 @@ import random
 
 class TorchTrainer(object):
     def __init__(self, args):
+        self.args = args
+
         # set random seed
         self.set_random_seed()
-
+        
         # cuda setting
-        self.args = args
         self.device = torch.device("cuda:{0}".format(args.device) if torch.cuda.is_available() else "cpu")
 
     def train(self, **kwargs):
