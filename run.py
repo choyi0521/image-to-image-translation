@@ -14,7 +14,7 @@ if __name__=='__main__':
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--save_freq', type=int, default=10)
     parser.add_argument('--print_loss_freq', type=int, default=40)
-    parser.add_argument('--eval_mode', type=bool, default=True)
+    parser.add_argument('--eval_mode', type=bool, default=False)
 
     # data loader
     parser.add_argument('--workers', type=int, default=4)
@@ -23,7 +23,7 @@ if __name__=='__main__':
     # model hyperparameters
     parser.add_argument('--inner_channels', type=int, default=64)
     parser.add_argument('--dropout', type=float, default=0.0)
-    parser.add_argument('--norm', type=str, default='instance')
+    parser.add_argument('--norm', type=str, default='batch')
 
     # training hyperparameters
     parser.add_argument('--lr', type=float, default=2e-4)
