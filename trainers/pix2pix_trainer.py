@@ -19,6 +19,12 @@ class Pix2PixTrainer(TorchTrainer):
             batch_size=args.batch_size,
             shuffle=True
         )
+        self.val_dataloader = DataLoader(
+            dataset=FacadesDataset(self.args, dataset_type='val'),
+            num_workers=args.workers,
+            batch_size=args.batch_size,
+            shuffle=False
+        )
         self.test_dataloader = DataLoader(
             dataset=FacadesDataset(self.args, dataset_type='test'),
             num_workers=args.workers,
@@ -46,11 +52,13 @@ class Pix2PixTrainer(TorchTrainer):
         self.scheduler_g = lr_scheduler.LambdaLR(self.optimizer_g, lr_lambda=lr_lambda)
         self.scheduler_d = lr_scheduler.LambdaLR(self.optimizer_d, lr_lambda=lr_lambda)
 
-        # parameter to save
+        # parameters to save
         self.epoch = 0
+        self.min_loss = None
 
-    def train(self, filepath=None):
+    def train(self):
         # load training info
+        filepath = self.args.checkpoint
         if filepath is not None:
             self._load(filepath)
 
@@ -90,22 +98,47 @@ class Pix2PixTrainer(TorchTrainer):
                 loss_g.backward()
                 self.optimizer_g.step()
 
-                print('Epoch[{0}]({1}/{2} - Loss_D: {3}, Loss_G: {4}, Loss: {5}'.format(
-                    self.epoch,
-                    iteration+1,
-                    len(self.train_dataloader),
-                    loss_d.item(),
-                    loss_g.item(),
-                    loss_d.item()+loss_g.item()
-                ))
+                if (iteration+1)%self.args.print_loss_freq == 0:
+                    print('Epoch[{0}]({1}/{2} - Loss_D: {3}, Loss_G: {4}, Loss: {5}'.format(
+                        self.epoch,
+                        iteration+1,
+                        len(self.train_dataloader),
+                        loss_d.item(),
+                        loss_g.item(),
+                        loss_d.item()+loss_g.item()
+                    ))
+            
             self.scheduler_g.step()
             self.scheduler_d.step()
 
             if self.epoch % self.args.save_freq == 0:
-                self._test()
-                self._save()
+                self._validate()
+                self._save(str(self.epoch))
+                self._save('last')
+    
+    def _validate(self):
+        self.model.eval()
+        with torch.no_grad():
+            mse = 0.0
+            for iteration, batch in enumerate(self.test_dataloader):
+                real_a, real_b = batch[0].to(self.device), batch[1].to(self.device)
+                pred_b = self.model.generate(real_a)
+                mse += self.criterion_mse(pred_b, real_b).item()/len(self.test_dataloader)
 
-    def _test(self, generate_images=True):
+        if self.min_loss is None or self.min_loss > mse:
+            self.min_loss = mse
+            self._save('best')
+
+        print('Epoch[{0}] - MSE: {1}'.format(
+            self.epoch, mse
+        ))
+
+    def test(self, generate_images=True):
+        # load training info
+        filepath=self.args.save_dir+'/checkpoint_best.pt'
+        if filepath is not None:
+            self._load(filepath)
+
         self.model.eval()
         with torch.no_grad():
             mse = 0.0
@@ -121,24 +154,25 @@ class Pix2PixTrainer(TorchTrainer):
             self.epoch, mse
         ))
 
-    def _save(self):
+    def _save(self, suffix):
         dic = {
             'epoch': self.epoch,
+            'min_loss': self.min_loss,
             'model_state_dict': self.model.state_dict(),
             'optimizer_g_state_dict': self.optimizer_g.state_dict(),
             'optimizer_d_state_dict': self.optimizer_d.state_dict(),
             'scheduler_g_state_dict': self.scheduler_g.state_dict(),
             'scheduler_d_state_dict': self.scheduler_d.state_dict()
         }
-        for suffix in [str(self.epoch), 'last']:
-            torch.save(dic, self.args.save_dir+'/checkpoint_{0}.pt'.format(suffix))
-            print('Saved checkpoint {0}'.format(
-                self.args.save_dir+'/checkpoint_{0}.pt'.format(suffix)
-            ))
+        torch.save(dic, self.args.save_dir+'/checkpoint_{0}.pt'.format(suffix))
+        print('Saved checkpoint {0}'.format(
+            self.args.save_dir+'/checkpoint_{0}.pt'.format(suffix)
+        ))
 
     def _load(self, filepath):
         dic = torch.load(filepath)
         self.epoch = dic['epoch']
+        self.min_loss = dic['min_loss']
         self.model.load_state_dict(dic['model_state_dict'])
         self.optimizer_g.load_state_dict(dic['optimizer_g_state_dict'])
         self.optimizer_d.load_state_dict(dic['optimizer_d_state_dict'])
