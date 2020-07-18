@@ -33,7 +33,7 @@ class Pix2PixTrainer(TorchTrainer):
         )
 
         # model components
-        self.model = Pix2Pix(args.inner_channels, args.dropout).to(self.device)
+        self.model = Pix2Pix(args.inner_channels, args.dropout, args.norm).to(self.device)
         self.generator = self.model.generator
         self.discriminator = self.model.discriminator
 
@@ -116,14 +116,21 @@ class Pix2PixTrainer(TorchTrainer):
                 self._save(str(self.epoch))
                 self._save('last')
     
-    def _validate(self):
-        self.model.eval()
+    def _validate(self, generate_images=True):
+        if self.args.eval_mode:
+            self.model.eval()
+        else:
+            self.model.train()
         with torch.no_grad():
             mse = 0.0
             for iteration, batch in enumerate(self.test_dataloader):
                 real_a, real_b = batch[0].to(self.device), batch[1].to(self.device)
                 pred_b = self.model.generate(real_a)
                 mse += self.criterion_mse(pred_b, real_b).item()/len(self.test_dataloader)
+                if generate_images:
+                    for i in range(pred_b.shape[0]):
+                        im = tensor2image(pred_b[i])
+                        im.save(self.args.results_dir+'/'+str(self.args.batch_size*iteration+i+1)+'.jpg')
 
         if self.min_loss is None or self.min_loss > mse:
             self.min_loss = mse
@@ -133,13 +140,15 @@ class Pix2PixTrainer(TorchTrainer):
             self.epoch, mse
         ))
 
-    def test(self, generate_images=True):
+    def test(self, filepath, generate_images=True):
         # load training info
-        filepath=self.args.save_dir+'/checkpoint_best.pt'
         if filepath is not None:
             self._load(filepath)
 
-        self.model.eval()
+        if self.args.eval_mode:
+            self.model.eval()
+        else:
+            self.model.train()
         with torch.no_grad():
             mse = 0.0
             for iteration, batch in enumerate(self.test_dataloader):

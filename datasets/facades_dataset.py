@@ -10,7 +10,10 @@ class FacadesDataset(Dataset):
         if dataset_type not in ['train', 'val', 'test']:
             raise Exception('No such dataset_type')
         image_dir = args.dataset + '/' + dataset_type
-        self.fnames = [image_dir+'/'+fname for fname in listdir(image_dir)]
+        
+        fnames = [fname for fname in listdir(image_dir)]
+        fnames = sorted(fnames, key=lambda x: int(x[:-4]))
+        self.fnames = [image_dir+'/'+fname for fname in fnames]
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),
